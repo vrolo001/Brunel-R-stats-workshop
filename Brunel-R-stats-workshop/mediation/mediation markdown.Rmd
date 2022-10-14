@@ -1,0 +1,201 @@
+---
+title: "Mediation models"
+author: "Vania Rolon"
+date: '2022-07-14'
+output: html_document
+---
+
+# Quick R guide
+
+Think of R as a library. It can hold a lot of useful information, but it is only as strong as the books in it. The books of R are called "packages": there are many packages for different purposes, and you "buy" (or in this case, install) any packages you wish to add to your collection. The code below shows how to install the packages we will use for this workshop. You only need to install packages once, much like you would only buy a book once.
+
+```{r}
+install.packages("readr")
+install.packages("lavaan")
+```
+
+Books are usually stored on your library shelves, and whenever you want a specific book or books, you usually take them off the shelves. In R, you have a "working desk" where you place any books you plan to use. To call your R packages from the invisible virtual shelves they are stored in, and onto your working table, you use the command library(). So it is not enough that we installed the packages above, now we need to call them into action. Unlike the install.packages() function that can be ran only once, you need to use library() every time you open R for the packages to work; when you close R, all your packages are sent back to their shelves, so they need to be brought to the working table at the start of every session.
+
+```{r}
+library(readr) #helps download files
+library(lavaan) #contains the functions for path modelling
+
+options(scipen = 999) #little way to get rid of scientific notation
+```
+
+Notice the # signs in the code chunks. These are comments. They are useful for small notes, and because they are not code, R will not run them. Be sure to start any comments with # or R will think your comments are code and lead to errors. Now that we have called the packages we will use, we can download our data. 
+
+We create an object called data, which is made of (represented by <-) the read_csv function looking for our data set. You need to specify the path on your own computer to wherever you stored the folder for the workshop. In my case, I saved this file on my Desktop. If you try running the chunk below, you will get an error because you are not working from my computer. Try downloading the data by specifying your own path.
+
+```{r}
+data <- read_csv("C:/Users/Vania/Desktop/Brunel mediation workshop/data and code/moralisation data.csv")
+
+library (tidyverse)
+data <- data %>%
+  select(sex, soibh2, soiatt, soides, sdo, moral_wo, moral_men) #select any variables you want once workshop is done and oversave this as the moralisation data available
+
+#Some useful commands
+data #shows the entire data set
+head(data) #show the first 6 values of the data set
+head(data, 20) #you specify you want the first 20 values instead of the default 6. These specificaions are called arguments
+tail(data) #show last 6 values of the data. Works same way as head()
+dim(data) #show number of rows and of columns
+```
+
+Ok, we are set to go, but let's first take a detour into some theoretical background.
+
+# What is mediation?
+
+Mediation models seek to identify and explain the mechanisms or processes that underlie an observed relationship between an independent variable (IV) and a dependent variable (DV) via the inclusion of a third variable (or variables), known as a mediator variable. Basically, they seek to answer *how* X influences Y via M.
+
+Mediation and moderation are very different things. Mediation, as mentioned, focuses on how one IV affects the DV through its relationship with M. In its strictest form, it implies causation (X causes M, and M causes Y). Moderation focuses on whether the effect of X on Y depends on where someone scores in M. For example, perhaps the relationship between X and Y is only significant for participants low on M, but there is no relationship between X and Y when M is high. Moderation seeks to answer *when* X influences Y.
+
+Mediation models are akin to computing several regressions (i.e., the relationship between X and Y has its own regression coefficient; so does the relationship between X and M, and between M and Y), but beyond giving regression weights, mediation models can also tell us if there are any *indirect effects* through which X influences Y (i.e., is the X -> M -> Y path significant?). When done with path analysis packages like the one used in this workshop, we can also (sometimes) tell if the model as a whole has good fit (i.e., does the model fit our observations in the way we specified?).
+
+You can have two types of mediation: partial and full. In partial mediation, X still has some effect on Y, even after controlling for the mediating effect of M in the relationship between X and Y. In full mediation, the effect of X on Y becomes non-significant once you account for the mediating role of M. The individual paths are given names to be easily identifiable. Any path from an IV/predictor/X to a mediator is an "a" path. Any path from the mediator to the DV/outcome variable/Y is a "b" path. The *indirect effect* is simply the multiplication of these paths (a*b). 
+
+The effect of the IV on the DV without controlling for the mediated effect is called the *total effect* and is represented by c. If there is still an effect after accounting for the mediation, this effect is called the *direct effect" and is represented by c'.
+
+
+![Types of models](C:/Users/Vania/Desktop/Brunel mediation workshop/images/example models.png)
+
+# Starting simple: regressing Y on X
+
+In the data we will be working with, I asked participants to rate how moral or immoral they considered promiscuity among women to be on a scale from 1 to 7, with higher scores representing greater moralisation of promiscuity in women as being wrong. My main hypothesis based on reviewing the literature was that men would likely moralise promiscuity in women more than other women would. Basically, I wanted to see if sex could predict moralisation (named as moral_wo). This could be done with an independent sample t-test comparing the mean scores in moralisation among men to those among women, but it can also be done with regression provided that your group variable is dichotomous and can be converted into 0s and 1s. Let's see if that is the case with sex.
+
+If you run the code below, you will notice that my sex variable is not numeric at the moment. You can also see this when looking at the data set: responses are either "Female" or "Male". The function class() will tell you what type the variable you provide it with in () is. However, because you can technically have multiple data sets loaded in R, you cannot just type class(sex). Instead you need to specify the name of the data set, then $ as R's way of understanding it needs to subset a specific variable in that set, and then the variable you wish to examine. In this case, my variable is character.
+
+```{r}
+class(data$sex) 
+```
+
+To be able to do regressions properly, you want to make sure your variables are converted to numeric, with one group being coded as 0, and the other one being coded as 1. The regression coefficient we get for sex will be the predicted change in Y (moralisation) for a one-unit change in sex (going from sex = 0 to sex = 1). Because my hypothesis is that moralisation will be greater in men, I will set women as 0. If the regression coefficient is positive, it means that we can expect Y to increase when we go from women (sex = 0) to men (sex = 1). This needs a little bit of data wrangling, but thankfully the tidyverse package is perfect for such things.
+
+```{r}
+install.packages("tidyverse")
+library(tidyverse)
+
+data <- data %>%
+  mutate(sexnum = ifelse(sex == "Female", 0, 1))
+```
+
+The code above might look overwhelming, but it is actually simple to read. First, we create the data set called "data" and we tell R this set will be made of (<-) the current version we have of "data" and then (%>%) we will create (or mutate as R calls it) a new variable called sexnum (which stands for sex numeric). I could overwrite the original sex variable, but personally I always prefer keeping the old variables. Doing so also let's us see if our code worked well because we can compare the sex and sexnum columns. Ok we can now run a simple regression predicting moral_wo from sexnum.I will call this regression lm_simple.The lm() function runs linear models. It regresses (~) the DV on your IV so the DV is on the left side of the formula, and the IV is on the right side. Next, we specify what data we are using. Creating the lm_simple object is only the first step. Now we need to ask for the output. To do this, you use the summary() function and specify which model you want a summary for in ()
+
+```{r}
+lm_simple <- lm(moral_wo ~ sex, data = data)
+summary(lm_simple)
+```
+
+The intercept tells us that, when sex is 0 (i.e., when a participant is female) the predicted value for moralisation of women's promiscuity is 2.05 (on a 1-7 scale). The regression coefficient (aka the estimate or slope) is the change in moralisation we can expect if we go from sex = 0 to sex = 1 (i.e., if we go from a female participant to a male participant). This change of .39 might seem small, but it is statistically significant. We conclude that men do moralise promiscuity in women more than other women do. We can also see the $R^2$ is .02, meaning that the proportion of variance in moralisation accounted for by sex is a small .02 or 2%. 
+
+# Adding one mediator
+
+We see that sex has an effect on the moralisation of women's promiscuity, but the simple regression model cannot tell us what drives this relationship. One possible explanation according to some social constructivist theories is social dominance orientation, or the desire for hierarchical social structures. The gist of the theory is that men consistently score higher on social dominance because it is in their best interest to maintain traditional gender roles that favour them. One way to keep this status quo is to create and endorse hierarchy-legitimising myths, such as the belief that promiscuous women are not worthy of respect. In this manner, sex predicts greater social dominance orientation (SDO), which in turn predicts greater moralisation of women's promiscuity.
+
+Recall the illustration of a simple mediation model where X -> M -> Y. We could run a simple regression predicting SDO from sex (X -> M), another predicting moralisation from SDO (M -> Y), and a third one predicting moralisation from sex (X -> Y). Doing so would tell us if each indiviudal path is significant, but the lm() function will not be able to tell us if the indirect effect of sex on moralisation through SDO is significant, because this indirect effect is made of two regressions. Instead, we can use bootstrapping to obtain confidence intervals (instead of p-values) for the a*b effect.
+
+## What even is bootstrapping?
+
+A bootstrapped data set is simply a new set of data taken from your original data set with replacement (i.e, you can select the same value more than once) and of the same length as the original data set (so if n = 200, a bootstrapped data set will also be of n = 200). Boostrapping is the process by which several bootstrapped data sets are created (recommended value is minimum 5,000 though 10,000 is also common). For each of these thousandths of sets, we can calculate any parameter of interest. In the case of mediation, we can calculate the indirect effect (a*b) of each set. Because each set is made of different values, the resulting indirect effects will differ from one bootstrapped data set to the next. However, because stats are magical, the distribution of these indirect effects will be approximately normal. We can then take the 95% confidence interval of this distribution of indirect effects (i.e., the range of values we expect our estimated indirect effect to fall between 95% of the time if we redid this study multiple times) and conclude that the true indirect effect in the population is somewhere between the lower bound CI and the upper bound CI. If this interval does not contain 0, our indirect effect is statistically significant. 
+
+You can find a fantastic video on bootstrapping in the link below:
+https://www.youtube.com/watch?v=Xz0x-8-cgaQ
+
+## So what does this all mean?
+
+Thankfully we do not need to manually draw 5,000 bootstrapped samples. R can do these in just a few minutes, but not with the lm() function. Instead, we can use the lavaan package, installed earlier, to build more complex models. We already installed and called the package with library(), so it is already working in the background. We can jump right into specifying our model. To do this we define the paths much like we would do with pen and paper and save them in an object (called med_model1). To let R know you are just "drawing" your paths you need to start with " specify your paths, and close with " once again. The symbols representing regressions vs indirect effects also differ. To regress one variable on another variable, you use ~ but to specify an indirect effect you use :=
+
+Notice that we also give names to the regression coefficients: Moralisation is predicted as someone's SDO score multiplied by the regression weight b1, while SDO is predicted as someone's sex values (0 or 1) multiplied by a1. Finally, you can also include comments in this section. For now we will test a full mediation model where there is no path from sex to moralisation. This is because of parsimony: the simplest answer is typically the best one. We could test for partial mediation and have a direct effect, but it complicates the model by adding a path that may not be needed if a full mediation model has good fit. 
+
+```{r}
+med_model1 <- "
+#regressions
+moral_wo ~ b1*sdo
+sdo ~ a1*sexnum
+
+#indirect effects
+a1b1 := a1*b1
+
+#total effect IS the indirect effect because we have no direct effect in this model
+
+#comparing raw and absolute differences for SOI indirect effects and sdo effect. Raw used if same signs, absolute if different
+
+"
+
+```
+
+So far we have only defined the model. We have not fitted our data to it yet. The sem() function will give us most of the information we want, but there are other things that must be mentioned here. First, remember that bootstrapping uses random sampling. This means that if I were to run the sem() code I would get slightly different results from someone else using the same sem() code. This is not necessarily bad, but if you want someone, even yourself, to be able to replicate your exact results, being able to draw the exact same random samples you did the first time you ran the code, you need to give R a way of knowing the random sampling you used. This is done by setting a *seed*. A seed is a positive integer that initializes a random-number generator and enables you to create reproducible streams of random numbers. You can set the seed as any random number you want. Then when someone tries to reproduce your code, they will be able to get the same random samples you did, provided they use your seed. Be sure to set the seed every time you run any code that uses random sampling.
+
+Ok, moving on to the sem() function. We will create an object that houses the fit of our model (called med_model1_fit). Any specifications inside functions are known as arguments. The sem() function can take several arguments. The first argument is the name of the model we are fitting (med_model1). Next comes the data set we are working with. The third argument, meanstructure = TRUE,gives us an estimate of the regression intercepts. You could end the arguments here if you want to run your model only once, but I want to bootstrap it and run the same model with different resamples 5000 times to get estimates that better approximate the population parameters, especially because SDO is not a normally distributed variable and bootstrapping is a good way to deal with non-normality. So I include a few extra arguments; se to specify I want to bootstrap, followed by the number of times I want to do this. Running this line will take a bit so be patient.
+
+As with lm() we need to ask for a summary of the model. We do this with summary() and include a few arguments to obtain more useful information. The second argument, fit.measures = TRUE, gives us the fit indices, which we will discuss shortly. Setting standardized = TRUE will give the standardised estimates. I believe some R packages can run their functions with either American or British English, but some cannot, so better to spell things the 'Merican way to be on the safe side. Finally, we can request the R square to see the proportion of the variance in moralisation accounted for by this new model by using rsquare = TRUE. 
+
+Finally, to see the confidence interval for the indirect effect, we run parameterEstimates(), specifying the model fit and the type of boostrapping method. There are multiple methods for calculating boostrapped CIs, but we will use the percentile method described earlier; the 5000 bootstrapped estimates are ordered by magnitude and the 25th estimate (2.5th percentile) and 975th estimate (97.5th percentile) are taken as the confidence limits, yielding a 95% confidence interval.
+
+```{r}
+set.seed(1993)
+
+med_model1_fit <- sem(med_model1, data = data, meanstructure = TRUE, se = "bootstrap", bootstrap = 5000)
+
+summary(med_model1_fit, fit.measures = TRUE, standardized = TRUE, rsquare = TRUE)  
+
+parameterEstimates(med_model1_fit, boot.ci.type = "perc") 
+
+```
+This output is overwhelmingly long but we will extract the values that matter. First, the fit indices. Remember that all models are wrong, but some models are useful. In other words, there is no real perfect fit, and we can only hope our model is a decent approximation of what might be happening in reality. Fit indices tell us how good of a job our model does. There are many such indices, all computed differently. You can dive into the scientific literature, but frankly I have come to take them at face value. Different disciplines report different ones, but in psychology the more common ones are the chi-statistic, the CFI, the RMSEA, and the SRMR (and the TLI, though I see it less often reported). 
+
+The chi-square statistic is perhaps the easiest one to understand. Essentially, the chi-square value tests whether the predicted model and our observed data are equal vs significantly different. In this case, we want our model to NOT be significantly different from our observed data, because no statistical difference means our model is doing a good job. Thus, we want the p-value for the chi-square test to be > .05. In small samples like this one, the chi-square is a fairly reliable index, but in bigger samples, it is easier for the chi-square to reach a p-value of < .05, even if the model is predicting the observed data well. This is why we use a combination of different indices. All you need to know for now is that the CFI and TLI should be close to 1.00. The CFI can only range from 0 to 1, but the TLI will sometimes go above 1. Meanwhile, you want the RMSEA and SRMR to be close to .00. If in doubt, check the table for acceptable and great values for fit indices.
+
+![Final model showing the partial mediating effects of SOI and SDO on sex differences in the moralisation of female sexuality](C:/Users/Vania/Desktop/Brunel mediation workshop/images/SEM fit indices.png)
+For our full mediation model, we have the following fit indices:
+
+```{r}
+table_fit <- matrix(NA, nrow = 20, ncol = 8) #################################adjust rows once you finish ################
+
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!#
+
+colnames(table_fit) = c("Model", "X2", "df", "p", "CFI", "TLI", "RMSEA", "SRMR")
+table_fit[1, ] <- c("med_model1", round(fitmeasures(med_model1_fit, c("chisq", "df", "pvalue" ,"cfi", "tli", "rmsea", "srmr")), 4))
+table_fit
+
+#This code simply creates a table that extracts all the fit indices we will be looking at for all the models we will build in this workshop. We will fill in the rows as we create new models.
+```
+
+Our fit indices are pretty good, so we do not need to add any more paths. A full mediation model does a good job at showing how SDO mediates the effect of sex on moralisation. Let's take a look at some important values further down the summary. The column estimate shows the unstandardised coefficients, while the column std.all column shows the standardised ones. Let's take a look at the regressions output:
+
+Regressions:
+                   Estimate  Std.Err  z-value  P(>|z|)   Std.lv  Std.all
+  moral_wo ~                                                            
+    sdo       (b1)    0.447    0.074    6.033    0.000    0.447    0.387
+  sdo ~                                                                 
+    sexnum    (a1)    0.512    0.122    4.182    0.000    0.512    0.236
+    
+SDO positively predicts moralisation of women's promiscuity, as the p-value is < .001. The unstandardised estimate *b* = .45 indicates that for every one-unit increase in SDO, the predicted change in moralisation is .45. Meanwhile, the standardised estimate $\beta$ = .39 shows that for every one standard deviation (SD) change in SDO, moralisation will increase by .39 SDs. At the moment the standardised coefficient is not too useful, but you will see it can have benefits when looking at mediators that use different scales.
+
+Does sex significantly predict SDO? Let's see if you can answer this one. Remember that 0 = females and 1 = males.
+
+We can take a look at $R^2$. We see that the proportion of variance in moralisation explained by our model is .15 or 15%. The simple regression we did earlier with just sex only accounted for .2 of the variance. Adding SDO helps understand more of the variance in moralisation.
+
+Finally, we can take a look at the indirect effect. So far, the a path (sex -> SDO) and the b path (SDO -> moral_wo) have been significant. Let's see if the indirect effect is. Looking at the summary output, we see the estimate is .23, and lavaan does give a p-value unlike earlier software, but let's take a look at the confidence intervals in the parameterEstimates output. The 95%CI is [.12, .37]. This means that for every one unit increase in sex, there is a .22 unit increase on moralisation passing through SDO. This effect can range between .12 and .37 in the population, but worst-case scenario if the "true" effect is .12, it is still not 0. SDO does mediate the relationship between sex and moralisation of women's promiscuity.
+
+## Quick note on partially standardised estimates
+
+If you answered the interpretation of the regression of sex on SDO correctly, you may have noticed that the standardised coefficient means that for a one SD change in sex, SDO is predicted to increase by .24 SDs. For categorical variables like sex, conceptualising a 1SD change in sex makes little sense. Instead, we can get partially standardised estimates: for an unstandardised one-unit change in sex (i.e., going from 0 to 1, or from female to male participants) what is the predicted change in SDs for moralisation? To get these estimates, we need to run another summary() call, but this time using the argument std.nox instead of standardized. We see that the partially standardised estimate for SDO regressed on sex is .47; moralisation is predicted to increase by .47 SDs for males.
+
+```{r}
+summary(med_model1_fit, std.nox=TRUE, rsquare=TRUE)
+```
+
+## Putting it al together
+
+While we did take a look at fit indices in this example, simple mediation does not typically report model fit because the model is, well...simple. Instead, a results paragraph and accompanying figure might looks like this:
+
+A simple mediation analysis revealed that SDO fully mediated the relationship between sex and SDO (*ab* = .22 95%BootCI [.12,.37]).
+
+
+
+
+
+
+
+![Final model showing the partial mediating effects of SOI and SDO on sex differences in the moralisation of female sexuality](C:/Users/Vania/Desktop/mediation model.png)
